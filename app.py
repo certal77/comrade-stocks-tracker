@@ -266,20 +266,31 @@ if page == "Analisar ação":
                 st.markdown(f"### 🔥 Nota Popular: **{score}/10**")
 
                 # Add to portfolio
-                if st.button("➕ Adicionar ao portfólio"):
-                    row = {"ticker": ticker, "invest_date": invest_date.strftime("%Y-%m-%d"),
-                           "price": invested_price, "amount": invested_amount}
-                    if storage_backend == "supabase":
-                        ok = supabase_save_row(row)
-                        if ok:
-                            st.success("Posição adicionada ao Supabase (persistida).")
-                            portfolio_df = supabase_load_portfolio()
-                        else:
-                            st.error("Falha ao gravar no Supabase.")
-                    else:
-                        portfolio_df = pd.concat([portfolio_df, pd.DataFrame([row])], ignore_index=True)
-                        local_save_portfolio(portfolio_df)
-                        st.success("Posição adicionada ao ficheiro local.")
+# Add to portfolio
+if st.button("➕ Adicionar ao portfólio"):
+    row = {
+        "ticker": ticker,
+        "invest_date": invest_date.strftime("%Y-%m-%d"),
+        "price": invested_price,
+        "amount": invested_amount
+    }
+
+    if storage_backend == "supabase":
+        st.write("Inserting row:", row)        # <-- debug: show row
+        ok = supabase_save_row(row)
+        st.write("Insert success?", ok)       # <-- debug: show if insertion worked
+
+        if ok:
+            st.success("Posição adicionada ao Supabase (persistida).")
+            portfolio_df = supabase_load_portfolio()
+            st.experimental_rerun()           # <-- refresh page so portfolio shows immediately
+        else:
+            st.error("Falha ao gravar no Supabase.")
+    else:
+        portfolio_df = pd.concat([portfolio_df, pd.DataFrame([row])], ignore_index=True)
+        local_save_portfolio(portfolio_df)
+        st.success("Posição adicionada ao ficheiro local.")
+
 
 elif page == "Portfólio":
     st.header("📂 Portfólio do Povo")
