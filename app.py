@@ -42,9 +42,11 @@ def fetch_history(ticker, period="6mo"):
         if hist is None or hist.empty:
             return None
         hist = hist.reset_index()
-        return hist[["Date","Close"]].rename(columns={"Date":"date","Close":"close"})
+        hist.columns = [c.lower() for c in hist.columns]  # converte todos para minúsculas
+        return hist[["date", "close"]]
     except Exception:
         return None
+
 
 def fetch_current_price_from_hist(hist_df):
     return float(hist_df['close'].iloc[-1])
