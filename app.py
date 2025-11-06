@@ -49,20 +49,35 @@ st.title("🚩 People's Investment Bureau")
 st.caption("Gabinete do Investidor Popular — guarda posições, analisa e pontua (1–10).")
 
 # ---------- Supabase setup if provided ----------
-SUPABASE_URL = st.secrets.get("SUPABASE_URL") if "SUPABASE_URL" in st.secrets else os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") if "SUPABASE_KEY" in st.secrets else os.environ.get("SUPABASE_KEY")
+# ---------- Supabase setup ----------
+SUPABASE_URL = st.secrets.get("SUPABASE_URL")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
 
 use_supabase = False
 supabase = None
+
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_AVAILABLE:
     try:
+        # create client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        # quick test (do not fail the app if table not present)
-        res = supabase.table("portfolio").select("*").limit(1).execute()
-        # If request succeeded, enable
-        use_supabase = True
-    except Exception:
+        
+        # quick test: try to fetch 1 row from portfolio table
+        try:
+            res = supabase.table("portfolio").select("*").limit(1).execute()
+            if res.data is not None:
+                use_supabase = True
+            else:
+                st.warning("Supabase conectado, mas tabela 'portfolio' está vazia.")
+        except Exception as table_err:
+            st.error(f"Erro ao acessar tabela 'portfolio': {table_err}")
+            use_supabase = False
+
+    except Exception as conn_err:
+        st.error(f"Não foi possível conectar ao Supabase: {conn_err}")
         use_supabase = False
+else:
+    st.info("Supabase não configurado. O app usará armazenamento local.")
+
 
 # ---------- Helpers ----------
 def local_load_portfolio():
