@@ -49,7 +49,7 @@ def fetch_history(ticker, period="6mo"):
 
 
 def fetch_current_price_from_hist(hist_df):
-    return float(hist_df['close'].iloc[-1])
+    return float(hist_df['Close'].iloc[-1])
 
 def compute_metrics(current_price, invested_price, invested_amount):
     if invested_price <= 0:
@@ -187,7 +187,7 @@ if page == "Analisar uma ação":
             if hist is None:
                 st.error("Não consegui obter histórico para esse ticker.")
             else:
-                current_price = fetch_current_price_from_hist(hist['close'])
+                current_price = fetch_current_price_from_hist(hist['Close'])
                 metrics = compute_metrics(current_price, invested_price, invested_amount)
                 st.metric("Preço atual", f"€{current_price:.2f}")
                 st.metric("Lucro / Prejuízo", f"€{metrics['profit']:.2f} ({metrics['roi_pct']:.2f}%)")
