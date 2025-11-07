@@ -3,7 +3,6 @@ Comrade Stocks — People's Investment Bureau (Streamlit)
 - Guarda localmente em 'portfolio.csv' (bom para correr localmente)
 - OU guarda no Supabase (definindo SUPABASE_URL e SUPABASE_KEY nas secrets do Streamlit Cloud)
 - Interface em português, tema vermelho, gráficos, downloads e nota 1-10.
-Requerências: ver requirements.txt
 """
 
 import streamlit as st
@@ -13,42 +12,35 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from datetime import date
 import os
-import base64
 
-# Optional supabase client (only used if credentials provided)
+# Optional supabase client
 try:
-    from supabase import create_client, Client as SupabaseClient
+    from supabase import create_client
     SUPABASE_AVAILABLE = True
 except Exception:
     SUPABASE_AVAILABLE = False
 
 # ---------- CONFIG ----------
-st.set_page_config(page_title="🚩 People's Investment Bureau", layout="wide",
-                   initial_sidebar_state="expanded")
+st.set_page_config(page_title="🚩 People's Investment Bureau", layout="wide", initial_sidebar_state="expanded")
 
-DATA_FILE = "portfolio.csv"  # fallback local file (works locally; on some cloud hosts filesystem may be ephemeral)
+DATA_FILE = "portfolio.csv"
 
-# Small CSS for communist-looking theme (red accents)
-st.markdown(
-    """
-    <style>
-    .stApp { background-color: #0b0b0b; color: #eee; }
-    .css-18e3th9 { padding-top: 0.5rem; }
-    .stButton>button { background-color: #b21d1d; border: none; color: white; }
-    .stDownloadButton>button { background-color: #d33; color: white; }
-    .stMetric { background-color: rgba(178,29,29,0.08); border-radius: 8px; padding: 8px; }
-    .block-container { padding: 1.25rem 1rem; }
-    h1, h2, h3 { color: #ffdddd; }
-    .sidebar .stButton>button { background-color: #b21d1d; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Small CSS for communist-looking theme
+st.markdown("""
+<style>
+.stApp { background-color: #0b0b0b; color: #eee; }
+.stButton>button { background-color: #b21d1d; border: none; color: white; }
+.stDownloadButton>button { background-color: #d33; color: white; }
+.stMetric { background-color: rgba(178,29,29,0.08); border-radius: 8px; padding: 8px; }
+.block-container { padding: 1.25rem 1rem; }
+h1, h2, h3 { color: #ffdddd; }
+.sidebar .stButton>button { background-color: #b21d1d; }
+</style>
+""", unsafe_allow_html=True)
 
 st.title("🚩 People's Investment Bureau")
 st.caption("Gabinete do Investidor Popular — guarda posições, analisa e pontua (1–10).")
 
-# ---------- Supabase setup if provided ----------
 # ---------- Supabase setup ----------
 SUPABASE_URL = st.secrets.get("SUPABASE_URL")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
@@ -58,26 +50,18 @@ supabase = None
 
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_AVAILABLE:
     try:
-        # create client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        
-        # quick test: try to fetch 1 row from portfolio table
         try:
             res = supabase.table("portfolio").select("*").limit(1).execute()
-            if res.data is not None:
-                use_supabase = True
-            else:
-                st.warning("Supabase conectado, mas tabela 'portfolio' está vazia.")
+            use_supabase = True
         except Exception as table_err:
-            st.error(f"Erro ao acessar tabela 'portfolio': {table_err}")
+            st.warning(f"Supabase conectado, mas erro ao acessar tabela 'portfolio': {table_err}")
             use_supabase = False
-
     except Exception as conn_err:
-        st.error(f"Não foi possível conectar ao Supabase: {conn_err}")
+        st.warning(f"Não foi possível conectar ao Supabase: {conn_err}")
         use_supabase = False
 else:
     st.info("Supabase não configurado. O app usará armazenamento local.")
-
 
 # ---------- Helpers ----------
 def local_load_portfolio():
@@ -86,27 +70,21 @@ def local_load_portfolio():
             return pd.read_csv(DATA_FILE, parse_dates=["invest_date"])
         except Exception:
             return pd.DataFrame(columns=["ticker", "invest_date", "price", "amount"])
-    else:
-        return pd.DataFrame(columns=["ticker", "invest_date", "price", "amount"])
+    return pd.DataFrame(columns=["ticker", "invest_date", "price", "amount"])
 
 def local_save_portfolio(df):
     df.to_csv(DATA_FILE, index=False)
 
 def supabase_load_portfolio():
-    # expects table 'portfolio' with columns: ticker (text), invest_date (date/text), price (numeric), amount (numeric)
     try:
         res = supabase.table("portfolio").select("*").execute()
         data = res.data
         if not data:
             return pd.DataFrame(columns=["ticker", "invest_date", "price", "amount"])
         df = pd.DataFrame(data)
-        # normalize column names
         df.columns = [c.lower() for c in df.columns]
         if "invest_date" in df.columns:
-            try:
-                df["invest_date"] = pd.to_datetime(df["invest_date"])
-            except:
-                pass
+            df["invest_date"] = pd.to_datetime(df["invest_date"], errors='coerce')
         return df[["ticker", "invest_date", "price", "amount"]]
     except Exception:
         return pd.DataFrame(columns=["ticker", "invest_date", "price", "amount"])
@@ -119,7 +97,6 @@ def supabase_save_row(row: dict):
         return False
 
 def supabase_delete_row(ticker, invest_date, price, amount):
-    # attempt deletion with match on all fields (requires appropriate permissions)
     try:
         supabase.table("portfolio").delete().match({
             "ticker": ticker,
@@ -139,9 +116,7 @@ def fetch_history(ticker, period="6mo"):
             return None
         hist = hist.reset_index()
         hist.columns = hist.columns.str.lower()
-        if "close" not in hist.columns:
-            return None
-        return hist[["date", "close"]]
+        return hist[["date", "close"]] if "close" in hist.columns else None
     except Exception:
         return None
 
@@ -183,25 +158,7 @@ def auto_review_text(hist, roi):
     else:
         trend = "estável"
 
-    # score 1-10 from roi
-    if roi >= 30:
-        score = 10
-    elif roi >= 15:
-        score = 9
-    elif roi >= 10:
-        score = 8
-    elif roi >= 5:
-        score = 7
-    elif roi >= 0:
-        score = 6
-    elif roi >= -5:
-        score = 5
-    elif roi >= -10:
-        score = 4
-    elif roi >= -20:
-        score = 3
-    else:
-        score = 1
+    score = 10 if roi >= 30 else 9 if roi >= 15 else 8 if roi >= 10 else 7 if roi >=5 else 6 if roi >=0 else 5 if roi >= -5 else 4 if roi >= -10 else 3 if roi >= -20 else 1
 
     text = (f"A ação apresenta {trend} ({pct:.2f}% no período). Observa-se {vol_text}. "
             f"Índice de desempenho popular: {score}/10. Esta é uma análise automática em português.")
@@ -220,11 +177,6 @@ else:
 
 st.sidebar.markdown("## Configuração")
 st.sidebar.write(f"Storage: **{storage_backend}**")
-if storage_backend == "supabase":
-    st.sidebar.write("A app está a usar Supabase (persistência online).")
-else:
-    st.sidebar.write("A app guarda num ficheiro `portfolio.csv` (local). On Streamlit Cloud a persistência local pode ser volátil).")
-
 st.sidebar.markdown("---")
 st.sidebar.write("Dicas: experimenta tickers como `AAPL`, `NVDA`, `TSLA`, `MSFT`.")
 st.sidebar.markdown("---")
@@ -234,7 +186,7 @@ page = st.sidebar.radio("Ir para", ["Analisar ação", "Portfólio", "Export/Imp
 
 if page == "Analisar ação":
     st.header("📈 Analisar ação")
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([2,1])
     with col1:
         ticker = st.text_input("Símbolo / ticker (ex: AAPL, NVDA):").strip().upper()
         invested_price = st.number_input("Preço por ação na compra (€):", min_value=0.0, step=0.01, format="%.2f")
@@ -244,9 +196,11 @@ if page == "Analisar ação":
         st.markdown("### Como usar")
         st.write("- Introduz o ticker e os dados do teu investimento.")
         st.write("- Clica em **Obter dados** para ver análise e gráfico.")
-        st.write("- Podes adicionar ao portfólio para guardar.")
+        st.write("- Depois podes adicionar ao portfólio para guardar.")
+
+    # Fetch data and show
     if st.button("🔎 Obter dados"):
-        if not ticker or invested_price <= 0 or invested_amount <= 0:
+        if not ticker or invested_price <=0 or invested_amount <=0:
             st.warning("Preenche ticker, preço e montante corretamente.")
         else:
             hist = fetch_history(ticker)
@@ -265,41 +219,32 @@ if page == "Analisar ação":
                 st.write(review_text)
                 st.markdown(f"### 🔥 Nota Popular: **{score}/10**")
 
-                # Add to portfolio
-# Add to portfolio
-if st.button("➕ Adicionar ao portfólio"):
-    row = {
-        "ticker": ticker,
-        "invest_date": invest_date.strftime("%Y-%m-%d"),
-        "price": invested_price,
-        "amount": invested_amount
-    }
-
-    if storage_backend == "supabase":
-        st.write("Inserting row:", row)        # <-- debug: show row
-        ok = supabase_save_row(row)
-        st.write("Insert success?", ok)       # <-- debug: show if insertion worked
-
-        if ok:
-            st.success("Posição adicionada ao Supabase (persistida).")
-            portfolio_df = supabase_load_portfolio()
-            st.experimental_rerun()           # <-- refresh page so portfolio shows immediately
-        else:
-            st.error("Falha ao gravar no Supabase.")
-    else:
-        portfolio_df = pd.concat([portfolio_df, pd.DataFrame([row])], ignore_index=True)
-        local_save_portfolio(portfolio_df)
-        st.success("Posição adicionada ao ficheiro local.")
-
+                # --- Add to portfolio button only here ---
+                if st.button("➕ Adicionar ao portfólio"):
+                    row = {
+                        "ticker": ticker,
+                        "invest_date": invest_date.strftime("%Y-%m-%d"),
+                        "price": invested_price,
+                        "amount": invested_amount
+                    }
+                    if storage_backend == "supabase":
+                        ok = supabase_save_row(row)
+                        if ok:
+                            st.success("Posição adicionada ao Supabase (persistida).")
+                            portfolio_df = supabase_load_portfolio()
+                        else:
+                            st.error("Falha ao gravar no Supabase.")
+                    else:
+                        portfolio_df = pd.concat([portfolio_df, pd.DataFrame([row])], ignore_index=True)
+                        local_save_portfolio(portfolio_df)
+                        st.success("Posição adicionada ao ficheiro local.")
 
 elif page == "Portfólio":
     st.header("📂 Portfólio do Povo")
     if portfolio_df.empty:
         st.info("Portfólio vazio — adiciona posições na página 'Analisar ação'.")
     else:
-        # show aggregated totals
         total_invested = portfolio_df["amount"].sum()
-        # compute current total safely
         total_now = 0.0
         total_profit = 0.0
         summary_rows = []
@@ -308,17 +253,15 @@ elif page == "Portfólio":
             price = float(r["price"])
             amount = float(r["amount"])
             hist = fetch_history(ticker)
-            if hist is None:
-                current = None
-                profit = None
-                roi = None
-            else:
+            if hist is not None:
                 current, shares, current_value, profit, roi = calc_metrics(hist, price, amount)
                 total_now += current_value
                 total_profit += profit
+            else:
+                current_value = profit = roi = None
             summary_rows.append({
-                "ticker": ticker, "invested": amount, "current_value": current_value if hist is not None else None,
-                "profit": profit if hist is not None else None, "roi": roi if hist is not None else None
+                "ticker": ticker, "invested": amount, "current_value": current_value,
+                "profit": profit, "roi": roi
             })
         st.metric("Total investido", f"€{total_invested:.2f}")
         st.metric("Valor atual total (estimado)", f"€{total_now:.2f}")
@@ -347,25 +290,20 @@ elif page == "Portfólio":
                     review_text, score = auto_review_text(hist, roi)
                     st.write(review_text)
                     st.markdown(f"**Nota Popular:** {score}/10")
-                    c1, c2 = st.columns([1, 1])
-                    if c1.download_button("📥 Baixar gráfico", data=buf.getvalue(), file_name=f"{ticker}_hist.png", mime="image/png"):
-                        pass
-                    # remove button
+                    c1, c2 = st.columns([1,1])
+                    c1.download_button("📥 Baixar gráfico", data=buf.getvalue(), file_name=f"{ticker}_hist.png", mime="image/png")
                     if c2.button("🗑️ Remover", key=f"remove_{idx}"):
-                        # remove in backend
                         if storage_backend == "supabase":
                             ok = supabase_delete_row(ticker, invest_date, price, amount)
                             if ok:
                                 st.success("Removido do Supabase.")
                                 portfolio_df = supabase_load_portfolio()
-                                st.experimental_rerun()
                             else:
-                                st.error("Falha ao remover no Supabase (ver permissões).")
+                                st.error("Falha ao remover no Supabase.")
                         else:
                             portfolio_df = portfolio_df.drop(index=idx).reset_index(drop=True)
                             local_save_portfolio(portfolio_df)
                             st.success("Removido do ficheiro local.")
-                            st.experimental_rerun()
 
         st.markdown("---")
         st.download_button("⬇️ Exportar portfólio (CSV)", data=df_to_csv_bytes(portfolio_df), file_name="portfolio.csv", mime="text/csv")
@@ -383,21 +321,25 @@ elif page == "Export/Import":
             if not expected.issubset(set(df_new.columns)):
                 st.error("CSV inválido: garantir colunas ticker,invest_date,price,amount")
             else:
-                # append
                 if storage_backend == "supabase":
-                    # insert rows to supabase
                     inserted = 0
                     for _, r in df_new.iterrows():
-                        row = {"ticker": str(r["ticker"]).upper(), "invest_date": str(r["invest_date"]), "price": float(r["price"]), "amount": float(r["amount"])}
+                        row = {
+                            "ticker": str(r["ticker"]).upper(),
+                            "invest_date": str(r["invest_date"]),
+                            "price": float(r["price"]),
+                            "amount": float(r["amount"])
+                        }
                         if supabase_save_row(row):
-                            inserted += 1
+                            inserted +=1
                     st.success(f"{inserted} linhas importadas para Supabase.")
+                    portfolio_df = supabase_load_portfolio()
                 else:
                     portfolio_df = pd.concat([portfolio_df, df_new], ignore_index=True)
                     local_save_portfolio(portfolio_df)
                     st.success("CSV importado para ficheiro local.")
-        except Exception as e:
-            st.error(f"Erro a importar CSV: {e}")
+except Exception as e:
+    st.error(f"Erro a importar CSV: {e}")
 
 st.markdown("---")
 st.caption("Feito em solidariedade — Comrade GPT 🚩")
