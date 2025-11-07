@@ -228,7 +228,6 @@ if page == "Analisar ação":
                 st.write(review_text)
                 st.markdown(f"### 🔥 Nota Popular: **{score}/10**")
 
-                # Add to portfolio
                 if st.button("➕ Adicionar ao portfólio", key=f"add_{ticker}_{invest_date}"):
                     row = {
                         "ticker": ticker,
@@ -264,13 +263,9 @@ elif page == "Portfólio":
             ticker = str(r["ticker"]).strip().upper()
             price = float(r["price"])
             amount = float(r["amount"])
-            invest_date = r.get("invest_date", "")
             hist = fetch_history(ticker)
-            current_value = None
-            profit = None
-            roi = None
             if hist is not None:
-                current, shares, current_value, profit, roi = calc_metrics(hist, price, amount)
+                _, _, current_value, profit, _ = calc_metrics(hist, price, amount)
                 total_now += current_value
                 total_profit += profit
 
@@ -350,9 +345,11 @@ elif page == "Export/Import":
                     st.success(f"{inserted} linhas importadas no Supabase")
                     update_portfolio_df(supabase_load_portfolio())
                 else:
-                    new_df = pd.concat([st.session_state["portfolio_df"], df_new], ignore_index=True)
-                    update_portfolio_df(new_df)
+                    new_df2 = pd.concat([st.session_state["portfolio_df"], df_new], ignore_index=True)
+                    update_portfolio_df(new_df2)
                     st.success("CSV importado localmente")
+        except Exception as e:
+            st.error(f"Erro a importar CSV: {e}")
 
 st.markdown("---")
 st.caption("Feito em solidariedade — Comrade GPT 🚩")
