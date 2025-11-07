@@ -235,15 +235,14 @@ if page == "Analisar ação":
                         "price": invested_price,
                         "amount": invested_amount
                     }
+                    new_df = pd.concat([st.session_state["portfolio_df"], pd.DataFrame([row])], ignore_index=True)
                     if storage_backend=="supabase":
-                        ok = supabase_save_row(row)
-                        if ok:
+                        if supabase_save_row(row):
                             st.success("Posição adicionada ao Supabase (persistida).")
                         else:
                             st.error("Falha ao gravar no Supabase.")
                         update_portfolio_df(supabase_load_portfolio())
                     else:
-                        new_df = pd.concat([st.session_state["portfolio_df"], pd.DataFrame([row])], ignore_index=True)
                         update_portfolio_df(new_df)
                         st.success("Posição adicionada localmente.")
 
@@ -300,13 +299,12 @@ elif page == "Portfólio":
                                        file_name=f"{ticker}_hist.png", mime="image/png",
                                        key=f"download_{idx}")
                     if c2.button("🗑️ Remover", key=f"remove_{idx}"):
+                        new_df = portfolio_df.drop(index=idx).reset_index(drop=True)
                         if storage_backend=="supabase":
-                            ok = supabase_delete_row(ticker, invest_date, price, amount)
-                            if ok:
+                            if supabase_delete_row(ticker, invest_date, price, amount):
                                 st.success("Removido do Supabase.")
                                 update_portfolio_df(supabase_load_portfolio())
                         else:
-                            new_df = portfolio_df.drop(index=idx).reset_index(drop=True)
                             update_portfolio_df(new_df)
                             st.success("Removido localmente.")
 
