@@ -338,7 +338,7 @@ elif page == "Export/Import":
                     portfolio_df = pd.concat([portfolio_df, df_new], ignore_index=True)
                     local_save_portfolio(portfolio_df)
                     st.success("CSV importado para ficheiro local.")
-except Exception as e:
+ Exception as e:
     st.error(f"Erro a importar CSV: {e}")
 
 st.markdown("---")
