@@ -176,6 +176,15 @@ else:
     storage_backend = "local"
     portfolio_df = local_load_portfolio()
 
+# ---------- SESSION STATE ----------
+if "portfolio_df" not in st.session_state:
+    st.session_state["portfolio_df"] = portfolio_df.copy()
+
+def update_portfolio_df(new_df):
+    st.session_state["portfolio_df"] = new_df
+    if storage_backend=="local":
+        local_save_portfolio(new_df)
+
 # ---------- Sidebar ----------
 st.sidebar.markdown("## Configuração")
 st.sidebar.write(f"Storage: **{storage_backend}**")
@@ -185,6 +194,7 @@ st.sidebar.write("Dicas: experimenta tickers como `AAPL`, `NVDA`, `TSLA`, `MSFT`
 # ---------- Pages ----------
 page = st.sidebar.radio("Ir para", ["Analisar ação", "Portfólio", "Export/Import"])
 
+# ---------- ANÁLISE DE AÇÃO ----------
 if page == "Analisar ação":
     st.header("📈 Analisar ação")
     col1, col2 = st.columns([2,1])
@@ -218,34 +228,37 @@ if page == "Analisar ação":
                 st.write(review_text)
                 st.markdown(f"### 🔥 Nota Popular: **{score}/10**")
 
-                if st.button("➕ Adicionar ao portfólio", key=f"add_{ticker}"):
+                # Add to portfolio
+                if st.button("➕ Adicionar ao portfólio", key=f"add_{ticker}_{invest_date}"):
                     row = {
                         "ticker": ticker,
                         "invest_date": invest_date.strftime("%Y-%m-%d"),
                         "price": invested_price,
                         "amount": invested_amount
                     }
-                    if storage_backend == "supabase":
+                    if storage_backend=="supabase":
                         ok = supabase_save_row(row)
                         if ok:
                             st.success("Posição adicionada ao Supabase (persistida).")
-                            portfolio_df = supabase_load_portfolio()
                         else:
                             st.error("Falha ao gravar no Supabase.")
+                        update_portfolio_df(supabase_load_portfolio())
                     else:
-                        portfolio_df = pd.concat([portfolio_df, pd.DataFrame([row])], ignore_index=True)
-                        local_save_portfolio(portfolio_df)
+                        new_df = pd.concat([st.session_state["portfolio_df"], pd.DataFrame([row])], ignore_index=True)
+                        update_portfolio_df(new_df)
                         st.success("Posição adicionada localmente.")
 
+# ---------- PORTFÓLIO ----------
 elif page == "Portfólio":
     st.header("📂 Portfólio do Povo")
+    portfolio_df = st.session_state["portfolio_df"]
+
     if portfolio_df.empty:
         st.info("Portfólio vazio — adiciona posições na página 'Analisar ação'.")
     else:
         total_invested = portfolio_df["amount"].sum()
         total_now = 0.0
         total_profit = 0.0
-        summary_rows = []
 
         for idx, r in portfolio_df.iterrows():
             ticker = str(r["ticker"]).strip().upper()
@@ -260,10 +273,6 @@ elif page == "Portfólio":
                 current, shares, current_value, profit, roi = calc_metrics(hist, price, amount)
                 total_now += current_value
                 total_profit += profit
-            summary_rows.append({
-                "ticker": ticker, "invested": amount, "current_value": current_value,
-                "profit": profit, "roi": roi
-            })
 
         st.metric("Total investido", f"€{total_invested:.2f}")
         st.metric("Valor atual total (estimado)", f"€{total_now:.2f}")
@@ -300,22 +309,23 @@ elif page == "Portfólio":
                             ok = supabase_delete_row(ticker, invest_date, price, amount)
                             if ok:
                                 st.success("Removido do Supabase.")
-                                portfolio_df = supabase_load_portfolio()
+                                update_portfolio_df(supabase_load_portfolio())
                         else:
-                            portfolio_df = portfolio_df.drop(index=idx).reset_index(drop=True)
-                            local_save_portfolio(portfolio_df)
+                            new_df = portfolio_df.drop(index=idx).reset_index(drop=True)
+                            update_portfolio_df(new_df)
                             st.success("Removido localmente.")
 
         st.markdown("---")
         st.download_button("⬇️ Exportar portfólio (CSV)", data=df_to_csv_bytes(portfolio_df),
                            file_name="portfolio.csv", mime="text/csv", key="export_portfolio")
 
+# ---------- EXPORT / IMPORT ----------
 elif page == "Export/Import":
     st.header("📦 Exportar / Importar")
     st.write("Exporta CSV ou importa CSV com colunas: ticker,invest_date,price,amount")
 
     if st.button("Exportar CSV"):
-        st.download_button("Descarregar CSV", data=df_to_csv_bytes(portfolio_df),
+        st.download_button("Descarregar CSV", data=df_to_csv_bytes(st.session_state["portfolio_df"]),
                            file_name="portfolio.csv", mime="text/csv", key="export_csv_page")
 
     uploaded = st.file_uploader("Importar CSV", type=["csv"])
@@ -338,13 +348,11 @@ elif page == "Export/Import":
                         if supabase_save_row(row):
                             inserted += 1
                     st.success(f"{inserted} linhas importadas no Supabase")
-                    portfolio_df = supabase_load_portfolio()
+                    update_portfolio_df(supabase_load_portfolio())
                 else:
-                    portfolio_df = pd.concat([portfolio_df, df_new], ignore_index=True)
-                    local_save_portfolio(portfolio_df)
+                    new_df = pd.concat([st.session_state["portfolio_df"], df_new], ignore_index=True)
+                    update_portfolio_df(new_df)
                     st.success("CSV importado localmente")
-        except Exception as e:
-            st.error(f"Erro a importar CSV: {e}")
 
 st.markdown("---")
 st.caption("Feito em solidariedade — Comrade GPT 🚩")
